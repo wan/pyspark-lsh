@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import numpy as np
 
 from pyspark import SparkContext, SparkConf
@@ -6,14 +7,26 @@ from pyspark.mllib.linalg import SparseVector
 
 import lsh
 
+
+def cleanup(text_line):
+    return text_line.lower().strip(',. ')
+
+
+def now():
+    return datetime.datetime.now().isoformat()
+
+
 def read_text(sc, path):
-    text = sc.textFile(path).collect()
+    text = sc.textFile(path).cache()
+    tokens = text.flatMap(lambda line: cleanup(line).split(' ')).distinct()
+    token_map = tokens.zipWithIndex().collectAsMap()
     data = []
-    for s in text:
-        elements = map(int, s[s.index("[") + 1:s.index("]")].split(","))
-        v = SparseVector(65535, elements, np.ones(len(elements)))
+    for line in text.collect():
+        elements = { token_map[token]: 1 for token in cleanup(line).split(' ') }
+        v = SparseVector(65535, elements)
         data.append(v)
-    return data
+    return sc.parallelize(data).zipWithIndex()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = 'Spark LSH',
@@ -41,8 +54,12 @@ if __name__ == "__main__":
     sc = SparkContext(conf = SparkConf())
 
     # Read the input data.
+    print now(), 'Starting'
     data = read_text(sc, args['input'])
     p = 65537
     m, n, b, c = args['bins'], args['numrows'], args['bands'], args['minbucketsize']
-    model = lsh.run(data, p, m, n, b, c)
-    print 'Found %s clusters.' % model.buckets.count()
+    vector_buckets = lsh.run(data, p, m, n, b, c)
+
+    bucket_ids = vector_buckets.map(lambda (vector, bucket): bucket).distinct()
+
+    print now(), 'Found %s clusters.' % bucket_ids.count()
