@@ -25,7 +25,7 @@ def run(zdata, p, m, n, b, c):
 
     # Start by generating the signatures for each data point.
     # Output format is:
-    # <(vector idx, band idx), minhash>
+    # <(vector id, band idx), minhash>
     sigs = zdata.flatMap(lambda x: [[(x[1], i % b), hashes[i](x[0])] for i, h in enumerate(hashes)])
 
     # Put together the vector minhashes in the same band.
@@ -44,10 +44,10 @@ def run(zdata, p, m, n, b, c):
 
     # Remaps each element to a cluster / bucket index.
     # Output format is:
-    # <vector idx, bucket idx>
+    # <vector id, bucket idx>
     vector_bucket = bands.map(lambda (bucket, vectors): frozenset(sorted(vectors))) \
         .distinct() \
         .zipWithIndex() \
-        .flatMap(lambda (vectors, idx): [(np.long(v), idx) for v in vectors])
+        .flatMap(lambda (vectors, idx): [(v, idx) for v in vectors])
 
     return vector_bucket
