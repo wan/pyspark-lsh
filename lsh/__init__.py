@@ -7,10 +7,6 @@ from pyspark.mllib.linalg import SparseVector
 import hasher
 
 
-
-
-
-
 def run(zdata,
         vector_size,
         num_bins,
