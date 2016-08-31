@@ -21,11 +21,12 @@ def read_text(sc, path):
     tokens = text.flatMap(lambda line: cleanup(line).split(' ')).distinct()
     token_map = tokens.zipWithIndex().collectAsMap()
     data = []
-    for line in text.collect():
+    raw_lines = list(enumerate(text.collect()))
+    for idx, line in raw_lines:
         elements = { token_map[token]: 1 for token in cleanup(line).split(' ') }
         v = SparseVector(65535, elements)
-        data.append(v)
-    return sc.parallelize(data).zipWithIndex()
+        data.append((v, idx))
+    return dict(raw_lines), sc.parallelize(data)
 
 
 if __name__ == "__main__":
@@ -55,7 +56,7 @@ if __name__ == "__main__":
 
     # Read the input data.
     print now(), 'Starting'
-    data = read_text(sc, args['input'])
+    raw_lines, data = read_text(sc, args['input'])
     p = 65537
     m, n, b, c = args['bins'], args['numrows'], args['bands'], args['minbucketsize']
     vector_buckets = lsh.run(data, p, m, n, b, c)
@@ -63,3 +64,10 @@ if __name__ == "__main__":
     bucket_ids = vector_buckets.map(lambda (vector, bucket): bucket).distinct()
 
     print now(), 'Found %s clusters.' % bucket_ids.count()
+
+    bucket_vectors = vector_buckets.map(lambda (vector, bucket): (bucket, vector)).groupByKey()
+    for (bucket, vectors) in bucket_vectors.collect():
+        print 'Bucket %s' % bucket
+        for vector in vectors:
+            print '\tDocument %s: %s ...' % (vector, raw_lines[vector][:100])
+        print '*' * 40
